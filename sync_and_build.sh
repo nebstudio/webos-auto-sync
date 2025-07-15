@@ -2,43 +2,45 @@
 set -e
 
 UPSTREAM_REPO="fs185085781/webos"
-TARGET_REPO="nebstudio/webos"   # 替换为你的仓库
-PLATFORMS="linux/amd64,linux/arm64,linux/arm/v7,linux/386,linux/arm/v6,linux/ppc64le,linux/s390x"
+TARGET_REPO="nebstudio/webos"
 
-# 1. 获取上游最新tag
-TAG=$(curl -s "https://hub.docker.com/v2/repositories/${UPSTREAM_REPO}/tags?page_size=1" | grep -Po '"name":.*?[^\\]",' | head -1 | awk -F'"' '{print $4}')
-if [ -z "$TAG" ]; then
-  echo "Failed to get upstream tag!"
-  exit 1
+# 获取上游latest tag的更新时间
+UPSTREAM_LATEST_INFO=$(curl -s "https://hub.docker.com/v2/repositories/${UPSTREAM_REPO}/tags/latest")
+UPSTREAM_LATEST_UPDATED=$(echo "$UPSTREAM_LATEST_INFO" | grep -oP '"last_updated":\s*"\K[^"]+')
+echo "Upstream latest updated: $UPSTREAM_LATEST_UPDATED"
+
+# 获取本地latest tag的更新时间
+MY_LATEST_INFO=$(curl -s "https://hub.docker.com/v2/repositories/${TARGET_REPO}/tags/latest")
+MY_LATEST_UPDATED=$(echo "$MY_LATEST_INFO" | grep -oP '"last_updated":\s*"\K[^"]+')
+echo "My latest updated: $MY_LATEST_UPDATED"
+
+# 如果本地latest不存在，MY_LATEST_UPDATED为空，直接构建
+if [[ -z "$MY_LATEST_UPDATED" ]]; then
+    echo "My repo has no latest, will build."
+    NEED_BUILD=1
+else
+    # 比较更新时间（都为ISO时间，直接比较字符串即可）
+    if [[ "$UPSTREAM_LATEST_UPDATED" > "$MY_LATEST_UPDATED" ]]; then
+        echo "Upstream latest is newer, will build."
+        NEED_BUILD=1
+    else
+        echo "No new update, exit."
+        exit 0
+    fi
 fi
 
-echo "Latest upstream tag: $TAG"
+# 获取上游最新的非latest标签（即最新的正式版号）
+UPSTREAM_TAGS=$(curl -s "https://hub.docker.com/v2/repositories/${UPSTREAM_REPO}/tags?page_size=10")
+# 取第一个不是latest的tag
+NEWEST_TAG=$(echo "$UPSTREAM_TAGS" | grep -oP '"name":\s*"\K[^"]+' | grep -v '^latest$' | head -1)
+echo "Latest non-latest tag: $NEWEST_TAG"
 
-# 2. 获取上次同步的tag
-LAST_TAG=""
-if [ -f last_tag.txt ]; then
-    LAST_TAG=$(cat last_tag.txt)
-fi
-
-echo "Last synced tag: $LAST_TAG"
-
-if [ "$TAG" == "$LAST_TAG" ]; then
-    echo "No new tag. Exiting."
-    exit 0
-fi
-
-echo "New tag detected: $TAG. Building and pushing..."
-
-# 3. 多平台构建并推送
+# 多平台构建并推送
 docker buildx create --use || true
-
 docker buildx build \
-  --platform $PLATFORMS \
-  -t ${TARGET_REPO}:${TAG} \
-  -t ${TARGET_REPO}:latest \
-  --push .
-
-# 4. 更新记录
-echo "$TAG" > last_tag.txt
+    --platform linux/386,linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/ppc64le,linux/s390x \
+    -t ${TARGET_REPO}:latest \
+    -t ${TARGET_REPO}:${NEWEST_TAG} \
+    --push .
 
 echo "Build and push complete."

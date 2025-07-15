@@ -1,8 +1,8 @@
-name: Auto Multi-Platform Build and Push
+name: Auto Multi-Arch Build and Push
 
 on:
   schedule:
-    - cron: '0 2 * * *' # 每天凌晨2点检查一次
+    - cron: '0 2 * * *'  # 每天UTC时间2点检查一次
   workflow_dispatch:
 
 jobs:
@@ -11,19 +11,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-
-      - name: Cache last_tag.txt
-        uses: actions/cache@v3
-        with:
-          path: last_tag.txt
-          key: last_tag-${{ github.run_id }}
-          restore-keys: |
-            last_tag-
 
       - name: Login to Docker Hub
         uses: docker/login-action@v2
