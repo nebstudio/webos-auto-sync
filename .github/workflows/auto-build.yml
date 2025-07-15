@@ -1,4 +1,5 @@
 name: Auto Multi-Arch Build and Push
+run-name: Auto Multi-Arch Build and Push-${{ github.run_started_at }}
 
 on:
   schedule:
