@@ -13,15 +13,23 @@ echo "Upstream latest updated: $UPSTREAM_LATEST_UPDATED"
 echo "== 获取本地latest tag的更新时间 =="
 MY_LATEST_INFO=$(curl -s "https://hub.docker.com/v2/repositories/${TARGET_REPO}/tags/latest")
 echo "MY_LATEST_INFO: $MY_LATEST_INFO"
-MY_LATEST_UPDATED=$(echo "$MY_LATEST_INFO" | grep -oP '"last_updated":\s*"\K[^"]+')
-echo "My latest updated: $MY_LATEST_UPDATED"
 
-# 如果本地latest不存在，MY_LATEST_UPDATED为空，直接构建
+# 判断是否404或没有last_updated
+if echo "$MY_LATEST_INFO" | grep -q "not found"; then
+    echo "My repo has no latest, will build."
+    MY_LATEST_UPDATED=""
+elif echo "$MY_LATEST_INFO" | grep -q '"last_updated":'; then
+    MY_LATEST_UPDATED=$(echo "$MY_LATEST_INFO" | grep -oP '"last_updated":\s*"\K[^"]+')
+    echo "My latest updated: $MY_LATEST_UPDATED"
+else
+    echo "Unknown error when getting my latest tag info, will build."
+    MY_LATEST_UPDATED=""
+fi
+
 if [[ -z "$MY_LATEST_UPDATED" ]]; then
     echo "My repo has no latest, will build."
     NEED_BUILD=1
 else
-    # 比较更新时间（都为ISO时间，直接比较字符串即可）
     if [[ "$UPSTREAM_LATEST_UPDATED" > "$MY_LATEST_UPDATED" ]]; then
         echo "Upstream latest is newer, will build."
         NEED_BUILD=1
